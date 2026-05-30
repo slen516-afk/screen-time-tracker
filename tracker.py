@@ -187,12 +187,12 @@ def classify_content(app_name, window_title):
     title_lower = window_title.lower()
     app_lower = app_name.lower()
     
-    # Match local development URLs (localhost, 127.0.0.1) on browser or system (unlimited port), or the dashboard itself
-    if "localhost" in title_lower or "127.0.0.1" in title_lower or "螢幕使用時間" in title_lower or "screentime" in title_lower:
+    # Match local development URLs, dashboard titles, or GitHub activities
+    if "localhost" in title_lower or "127.0.0.1" in title_lower or "螢幕使用時間" in title_lower or "screentime" in title_lower or "github" in title_lower or "github" in app_lower:
         return "學習"
         
     # Specific known applications take absolute priority
-    if app_lower in ["code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "antigravity ide.exe", "wsl.exe", "windows terminal.exe"]:
+    if app_lower in ["code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "antigravity ide.exe", "wsl.exe", "windows terminal.exe", "python.exe", "pythonw.exe"]:
         return "學習"
         
     if app_lower in ["spotify.exe", "vlc.exe", "netflix.exe", "steam.exe"]:
@@ -627,6 +627,11 @@ def run_tracker(stop_event=None):
                 app_name, pid = get_process_info(hwnd)
                 if app_name:
                     window_title = get_window_title(hwnd) or ""
+                    # Skip tracking if the active window is our own widget or lockout window
+                    title_lower_temp = window_title.lower()
+                    if "screen time widget" in title_lower_temp or "lockout.py" in title_lower_temp:
+                        time.sleep(1.0)
+                        continue
                     # Check and enforce app limit lockouts
                     check_app_lockout(hwnd, app_name, window_title)
                     
