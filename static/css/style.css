@@ -41,6 +41,7 @@
 .color-Productivity-Office { color: var(--color-pink); }
 .color-System { color: var(--color-blue); }
 .color-Education { color: var(--color-cyan); }
+.color-學習 { color: var(--color-cyan); }
 .color-Others { color: var(--color-grey); }
 
 .bg-Browsers { background: var(--color-green); }
@@ -50,6 +51,7 @@
 .bg-Productivity-Office { background: var(--color-pink); }
 .bg-System { background: var(--color-blue); }
 .bg-Education { background: var(--color-cyan); }
+.bg-學習 { background: var(--color-cyan); }
 .bg-Others { background: var(--color-grey); }
 
 /* ==========================================================================
@@ -1375,3 +1377,44 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   DASHBOARD RANGE SELECTOR BAR
+   ========================================================================== */
+.range-selector-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 4px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    align-self: flex-start;
+    width: fit-content;
+}
+
+.range-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    font-family: var(--font-heading);
+}
+
+.range-btn:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.range-btn.active {
+    color: var(--text-primary);
+    background: var(--bg-card-hover);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+

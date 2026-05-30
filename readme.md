@@ -10,10 +10,10 @@
 * 透過 Windows 原生 API (`ctypes`) 即時捕捉目前聚焦的活動視窗與處理序名稱。
 * **智慧閒置判定 (Idle Detection)**：系統會監測滑鼠與鍵盤的實際物理輸入。若無動作超過設定時間（預設 60 秒），系統將會自動暫停計時，確保您的數據真實精準，不受暫離電腦影響。
 
-### 2. 動態類別分類 (Education vs Entertainment)
+### 2. 動態類別分類 (學習 vs Entertainment)
 * 系統除了對常見軟體（如 VS Code、Notepad、Discord）進行靜態分類外，還內建了 **即時標題分析器**。
-* 當您使用 Chrome、Edge 或 Firefox 等瀏覽器時，分析器會依據網頁分頁標題的關鍵字，動態將當前瀏覽器會話分類為 **「教育學習 (Education)」**（以霓虹青顯示，包含 Wikipedia、Coursera、學校課程網站、程式學習等關鍵字）或 **「影音娛樂 (Entertainment & Media)」**（以霓虹紅顯示，包含 Netflix、Youtube、Twitch、Steam 等關鍵字）。
-* 本機 WSL 終端機 (`wsl.exe`) 與各大 IDE 自動歸類為教育學習。
+* 當您使用 Chrome、Edge 或 Firefox 等瀏覽器時，分析器會依據網頁分頁標題的關鍵字，動態將當前瀏覽器會話分類為 **「學習」**（以霓虹青顯示，包含 Wikipedia、Coursera、學校課程網站、程式學習、以及不限 Port 的 localhost/127.0.0.1 本地網址等關鍵字）或 **「影音娛樂 (Entertainment & Media)」**（以霓虹紅顯示，包含 Netflix、Youtube、Twitch、Steam 等關鍵字）。
+* 本機 WSL 終端機 (`wsl.exe`) 與各大 IDE 自動歸類為學習。
 
 ### 3. iOS 磨砂玻璃質感儀表板
 * **即時數據更新**：儀表板每 3 秒自動更新一次，呈現最即時的活躍應用程式狀態。

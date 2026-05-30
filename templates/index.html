@@ -67,11 +67,19 @@
 
             <!-- TAB 1: DASHBOARD -->
             <section id="tab-dashboard" class="tab-panel active">
+                <!-- Date/Range Selector Tab Bar -->
+                <div class="range-selector-bar">
+                    <button class="range-btn active" data-range="today">今日</button>
+                    <button class="range-btn" data-range="yesterday">昨日</button>
+                    <button class="range-btn" data-range="7days">過去 7 天</button>
+                    <button class="range-btn" data-range="30days">過去 30 天</button>
+                </div>
+
                 <div class="grid-layout">
                     <!-- Stat Card: Total Screen Time -->
                     <div class="card hero-card">
                         <div class="card-header">
-                            <span class="card-title">今日使用總時間</span>
+                            <span class="card-title" id="lbl-total-time-title">今日使用總時間</span>
                             <i data-lucide="hourglass" class="icon-accent-blue"></i>
                         </div>
                         <div class="hero-stats">
@@ -125,7 +133,7 @@
                                     <span id="lbl-avatar-edu-time">0.0h</span>
                                 </div>
                                 <div class="meter-bar">
-                                    <div class="meter-fill bg-Education" id="bar-avatar-edu" style="width: 0%"></div>
+                                    <div class="meter-fill bg-學習" id="bar-avatar-edu" style="width: 0%"></div>
                                 </div>
                             </div>
                             <div class="avatar-meter-row">
@@ -146,8 +154,8 @@
                 <div class="card chart-card">
                     <div class="card-header">
                         <div>
-                            <span class="card-title">今日活動分佈</span>
-                            <p class="card-subtitle">每小時使用時間分佈圖</p>
+                            <span class="card-title" id="lbl-chart-title">今日活動分佈</span>
+                            <p class="card-subtitle" id="lbl-chart-subtitle">每小時使用時間分佈圖</p>
                         </div>
                         <i data-lucide="trending-up"></i>
                     </div>
@@ -309,7 +317,7 @@
                         <option value="Entertainment & Media">Entertainment & Media (影音娛樂)</option>
                         <option value="Productivity & Office">Productivity & Office (辦公生產力)</option>
                         <option value="System">System (系統程式)</option>
-                        <option value="Education">Education (教育學習)</option>
+                        <option value="學習">學習 (學習)</option>
                         <option value="Others">Others (其他)</option>
                     </select>
                 </div>
@@ -364,7 +372,7 @@
                         <option value="Entertainment & Media">Entertainment & Media (影音娛樂)</option>
                         <option value="Productivity & Office">Productivity & Office (辦公生產力)</option>
                         <option value="System">System (系統程式)</option>
-                        <option value="Education">Education (教育學習)</option>
+                        <option value="學習">學習 (學習)</option>
                         <option value="Others">Others (其他)</option>
                     </select>
                 </div>

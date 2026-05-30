@@ -100,6 +100,14 @@ def init_db():
     # Default idle threshold
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('idle_threshold', ?)", (str(DEFAULT_IDLE_THRESHOLD),))
     
+    # Database Migration: Update 'Education' category to '學習'
+    try:
+        cursor.execute("UPDATE app_categories SET category = '學習' WHERE category = 'Education'")
+        cursor.execute("UPDATE window_logs SET category = '學習' WHERE category = 'Education'")
+        cursor.execute("UPDATE daily_limits SET target = 'category:學習' WHERE target = 'category:Education'")
+    except Exception as e:
+        print(f"Database migration error: {e}", file=sys.stderr)
+        
     conn.commit()
     conn.close()
 
@@ -174,14 +182,18 @@ def get_app_metadata(app_name):
     conn.close()
     return display_name, category
 
-# --- Content Classification (Education vs Entertainment) ---
+# --- Content Classification (學習/Education vs Entertainment) ---
 def classify_content(app_name, window_title):
     title_lower = window_title.lower()
     app_lower = app_name.lower()
     
+    # Match local development URLs (localhost, 127.0.0.1) on browser or system (unlimited port), or the dashboard itself
+    if "localhost" in title_lower or "127.0.0.1" in title_lower or "螢幕使用時間" in title_lower or "screentime" in title_lower:
+        return "學習"
+        
     # Specific known applications take absolute priority
     if app_lower in ["code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "antigravity ide.exe", "wsl.exe", "windows terminal.exe"]:
-        return "Education"
+        return "學習"
         
     if app_lower in ["spotify.exe", "vlc.exe", "netflix.exe", "steam.exe"]:
         return "Entertainment & Media"
@@ -235,7 +247,7 @@ def classify_content(app_name, window_title):
                 break
                 
         if has_edu_content:
-            return "Education"
+            return "學習"
         else:
             # Fallback to non-education categories
             if matched_platform in ["facebook", "fb.com"]:
@@ -245,6 +257,44 @@ def classify_content(app_name, window_title):
             elif matched_platform in ["pinterest"]:
                 return "Entertainment & Media"
             return "Social & Communication"
+
+    # --- Special Fine-Grained Classification for Video Platforms (YouTube, Bilibili) ---
+    is_video_platform = False
+    if "youtube" in title_lower or "bilibili" in title_lower:
+        is_video_platform = True
+        
+    if is_video_platform:
+        # 1. Check for Productivity & Office keywords (excel, word, notion, productivity hacks, etc.)
+        video_productivity_keywords = [
+            "excel", "word", "powerpoint", "ppt", "notion", "outlook", "office", "productivity", 
+            "生產力", "工作效率", "時間管理", "工作法", "筆記術", "整理術", "試算表", "簡報", "排程"
+        ]
+        for kw in video_productivity_keywords:
+            if kw in title_lower:
+                return "Productivity & Office"
+                
+        # 2. Check for Education keywords (drawing, art, tutorials, science, calculus, languages, coding, etc.)
+        video_education_keywords = [
+            "教學", "學習", "課程", "教育", "知識", "科普", "研究", "程式", "開發", "演算法", "技術",
+            "畫畫", "繪畫", "插畫", "速寫", "素描", "水彩", "油畫", "電繪", "塗鴉", "手繪", "動漫教學", 
+            "漫畫教學", "藝術", "設計", "筆記", "論文", "歷史", "科學", "物理", "化學", "生物", "英文", 
+            "數學", "微積分", "寫生", "美工", "臨摹", "勾線", "上色", "配色", "透視", "人體結構", "厚塗",
+            "作品", "創作", "畫作", "畫集", "作品集", "畫廊", "插圖", "原創", "同人", "二創", "草稿", 
+            "線稿", "落書", "板繪", "繪師", "插畫家", "藝術家", "畫師", "設計師",
+            "education", "tutorial", "lecture", "course", "learn", "study", "class", "classroom",
+            "art", "paint", "drawing", "sketch", "illustration", "design", "watercolor", "acrylic",
+            "oil painting", "digital art", "doodle", "procreate", "photoshop", "illustrator",
+            "clip studio", "krita", "anatomy", "perspective", "shading", "speedpaint", "speed drawing",
+            "portfolio", "artwork", "how to draw", "how to paint", "programming", "coding",
+            "calculator", "math", "english learning", "history", "science", "ted", "tedx",
+            "crash course", "lecture", "class"
+        ]
+        for kw in video_education_keywords:
+            if kw in title_lower:
+                return "學習"
+                
+        # 3. Default fallback for general video browsing is Entertainment & Media
+        return "Entertainment & Media"
 
     # Education Keywords (教育) - Cleaned for exact matching in window titles
     education_keywords = [
@@ -284,7 +334,7 @@ def classify_content(app_name, window_title):
         # Check educational keywords first
         for kw in education_keywords:
             if kw in title_lower:
-                return "Education"
+                return "學習"
         # Check entertainment keywords next
         for kw in entertainment_keywords:
             if kw in title_lower:

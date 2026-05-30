@@ -44,24 +44,31 @@ def index():
 @app.route("/api/stats/summary", methods=["GET"])
 def get_summary():
     try:
+        range_val = request.args.get("range", "today")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Today's total duration
-        cursor.execute("""
-        SELECT SUM(duration) 
-        FROM window_logs 
-        WHERE date(start_time) = date('now', 'localtime')
-        """)
+        # Calculate date conditions based on selected range
+        if range_val == "yesterday":
+            date_cond = "date(start_time) = date('now', '-1 day', 'localtime')"
+            prev_date_cond = "date(start_time) = date('now', '-2 days', 'localtime')"
+        elif range_val == "7days":
+            date_cond = "date(start_time) >= date('now', '-6 days', 'localtime')"
+            prev_date_cond = "date(start_time) >= date('now', '-13 days', 'localtime') AND date(start_time) < date('now', '-6 days', 'localtime')"
+        elif range_val == "30days":
+            date_cond = "date(start_time) >= date('now', '-29 days', 'localtime')"
+            prev_date_cond = "date(start_time) >= date('now', '-59 days', 'localtime') AND date(start_time) < date('now', '-29 days', 'localtime')"
+        else: # today
+            date_cond = "date(start_time) = date('now', 'localtime')"
+            prev_date_cond = "date(start_time) = date('now', '-1 day', 'localtime')"
+
+        # Current total duration in selected range
+        cursor.execute(f"SELECT SUM(duration) FROM window_logs WHERE {date_cond}")
         row_today = cursor.fetchone()
         total_today = row_today[0] if row_today and row_today[0] is not None else 0
         
-        # Yesterday's total duration
-        cursor.execute("""
-        SELECT SUM(duration) 
-        FROM window_logs 
-        WHERE date(start_time) = date('now', '-1 day', 'localtime')
-        """)
+        # Previous total duration for trend comparison
+        cursor.execute(f"SELECT SUM(duration) FROM window_logs WHERE {prev_date_cond}")
         row_yesterday = cursor.fetchone()
         total_yesterday = row_yesterday[0] if row_yesterday and row_yesterday[0] is not None else 0
         
@@ -72,12 +79,12 @@ def get_summary():
         elif total_today > 0:
             pct_change = 100.0
             
-        # Category Breakdown for today
-        cursor.execute("""
+        # Category Breakdown for selected range
+        cursor.execute(f"""
         SELECT COALESCE(l.category, c.category) as category, SUM(l.duration) as cat_duration
         FROM window_logs l
         LEFT JOIN app_categories c ON l.app_name = c.app_name
-        WHERE date(l.start_time) = date('now', 'localtime')
+        WHERE {date_cond}
         GROUP BY COALESCE(l.category, c.category)
         ORDER BY cat_duration DESC
         """)
@@ -86,7 +93,7 @@ def get_summary():
         
         # Default empty categories to 0 if not tracked
         all_categories = ["Browsers", "Developer Tools", "Social & Communication", 
-                          "Entertainment & Media", "Productivity & Office", "System", "Education", "Others"]
+                          "Entertainment & Media", "Productivity & Office", "System", "學習", "Others"]
         for cat in all_categories:
             if cat not in category_data:
                 category_data[cat] = 0
@@ -103,34 +110,76 @@ def get_summary():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# 2. Chart Stats (Hourly breakdown for today)
+# 2. Chart Stats (Hourly breakdown for today/yesterday, Daily for 7/30 days)
 @app.route("/api/stats/chart", methods=["GET"])
 def get_chart_data():
     try:
+        range_val = request.args.get("range", "today")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Initialize 24 hours to 0
-        hourly_data = [0] * 24
-        
-        cursor.execute("""
-        SELECT strftime('%H', start_time) as hr, SUM(duration) as hr_duration
-        FROM window_logs
-        WHERE date(start_time) = date('now', 'localtime')
-        GROUP BY hr
-        """)
-        
-        rows = cursor.fetchall()
-        for row in rows:
-            hour_idx = int(row["hr"])
-            if 0 <= hour_idx < 24:
-                hourly_data[hour_idx] = row["hr_duration"]
+        if range_val in ["today", "yesterday"]:
+            # Hourly breakdown
+            hourly_data = [0] * 24
+            labels = [f"{i}點" for i in range(24)]
+            
+            if range_val == "yesterday":
+                date_cond = "date(start_time) = date('now', '-1 day', 'localtime')"
+            else:
+                date_cond = "date(start_time) = date('now', 'localtime')"
                 
+            cursor.execute(f"""
+            SELECT strftime('%H', start_time) as hr, SUM(duration) as hr_duration
+            FROM window_logs
+            WHERE {date_cond}
+            GROUP BY hr
+            """)
+            
+            rows = cursor.fetchall()
+            for row in rows:
+                hour_idx = int(row["hr"])
+                if 0 <= hour_idx < 24:
+                    hourly_data[hour_idx] = row["hr_duration"]
+            data_val = hourly_data
+            
+        else:
+            # Daily breakdown (7 days or 30 days)
+            days_count = 7 if range_val == "7days" else 30
+            
+            # Generate the list of dates for the last N days (ascending order)
+            dates_list = []
+            labels = []
+            for i in reversed(range(days_count)):
+                cursor.execute(f"SELECT date('now', '-{i} day', 'localtime')")
+                dt = cursor.fetchone()[0]
+                dates_list.append(dt)
+                # Formatted label: e.g. "5/30"
+                parts = dt.split("-")
+                labels.append(f"{int(parts[1])}/{int(parts[2])}")
+                
+            daily_data = [0] * days_count
+            date_cond = f"date(start_time) >= date('now', '-{days_count - 1} days', 'localtime')"
+            
+            cursor.execute(f"""
+            SELECT date(start_time) as dt, SUM(duration) as day_duration
+            FROM window_logs
+            WHERE {date_cond}
+            GROUP BY dt
+            """)
+            
+            rows = cursor.fetchall()
+            date_to_duration = {row["dt"]: row["day_duration"] for row in rows}
+            
+            for idx, dt in enumerate(dates_list):
+                daily_data[idx] = date_to_duration.get(dt, 0)
+                
+            data_val = daily_data
+            
         conn.close()
-        
         return jsonify({
             "success": True,
-            "chart_data": hourly_data
+            "chart_data": data_val,
+            "labels": labels
         })
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -139,15 +188,30 @@ def get_chart_data():
 @app.route("/api/stats/apps", methods=["GET"])
 def get_apps_data():
     try:
+        range_val = request.args.get("range", "today")
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Get overall applications and their today's duration
-        cursor.execute("""
+        # Calculate date conditions based on selected range
+        if range_val == "yesterday":
+            date_cond = "date(l.start_time) = date('now', '-1 day', 'localtime')"
+            sub_date_cond = "date(start_time) = date('now', '-1 day', 'localtime')"
+        elif range_val == "7days":
+            date_cond = "date(l.start_time) >= date('now', '-6 days', 'localtime')"
+            sub_date_cond = "date(start_time) >= date('now', '-6 days', 'localtime')"
+        elif range_val == "30days":
+            date_cond = "date(l.start_time) >= date('now', '-29 days', 'localtime')"
+            sub_date_cond = "date(start_time) >= date('now', '-29 days', 'localtime')"
+        else: # today
+            date_cond = "date(l.start_time) = date('now', 'localtime')"
+            sub_date_cond = "date(start_time) = date('now', 'localtime')"
+        
+        # Get overall applications and their duration in this range
+        cursor.execute(f"""
         SELECT l.app_name, c.display_name, c.category, SUM(l.duration) as app_duration
         FROM window_logs l
         JOIN app_categories c ON l.app_name = c.app_name
-        WHERE date(l.start_time) = date('now', 'localtime')
+        WHERE {date_cond}
         GROUP BY l.app_name
         ORDER BY app_duration DESC
         """)
@@ -169,11 +233,11 @@ def get_apps_data():
                 cat_lim_row = cursor.fetchone()
                 limit = cat_lim_row["limit_seconds"] if cat_lim_row else None
                 
-            # Fetch top window titles/subtasks for this app today
-            cursor.execute("""
+            # Fetch top window titles/subtasks for this app in this range
+            cursor.execute(f"""
             SELECT window_title, SUM(duration) as win_duration
             FROM window_logs
-            WHERE app_name = ? AND date(start_time) = date('now', 'localtime') AND window_title != ''
+            WHERE app_name = ? AND {sub_date_cond} AND window_title != ''
             GROUP BY window_title
             ORDER BY win_duration DESC
             LIMIT 8
@@ -203,15 +267,26 @@ def get_apps_data():
 @app.route("/api/stats/timeline", methods=["GET"])
 def get_timeline():
     try:
+        range_val = request.args.get("range", "today")
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Calculate date conditions based on selected range
+        if range_val == "yesterday":
+            date_cond = "date(l.start_time) = date('now', '-1 day', 'localtime')"
+        elif range_val == "7days":
+            date_cond = "date(l.start_time) >= date('now', '-6 days', 'localtime')"
+        elif range_val == "30days":
+            date_cond = "date(l.start_time) >= date('now', '-29 days', 'localtime')"
+        else: # today
+            date_cond = "date(l.start_time) = date('now', 'localtime')"
+        
         # Get last 50 events today where duration was significant (>= 3 seconds)
-        cursor.execute("""
+        cursor.execute(f"""
         SELECT l.app_name, c.display_name, COALESCE(l.category, c.category) as category, l.window_title, l.start_time, l.end_time, l.duration
         FROM window_logs l
         LEFT JOIN app_categories c ON l.app_name = c.app_name
-        WHERE date(l.start_time) = date('now', 'localtime') AND l.duration >= 3
+        WHERE {date_cond} AND l.duration >= 3
         ORDER BY l.start_time DESC
         LIMIT 50
         """)
@@ -435,12 +510,12 @@ def get_character_stats():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Query total duration for Education in past 30 days
+        # Query total duration for 學習 in past 30 days
         cursor.execute("""
         SELECT SUM(l.duration) 
         FROM window_logs l
         LEFT JOIN app_categories c ON l.app_name = c.app_name
-        WHERE COALESCE(l.category, c.category) = 'Education' 
+        WHERE COALESCE(l.category, c.category) = '學習' 
           AND date(l.start_time) >= date('now', '-30 days', 'localtime')
         """)
         row_edu = cursor.fetchone()

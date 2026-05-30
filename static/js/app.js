@@ -4,6 +4,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Current State
     let currentTab = 'dashboard';
+    let currentRange = 'today';
     let hourlyChart = null;
     let appsData = [];
     let categoriesData = {};
@@ -82,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================================
     // CHART.JS INITIALIZATION
     // ==========================================================================
-    function initChart(initialData) {
+    function initChart(initialData, chartLabels) {
         const ctx = document.getElementById('hourlyUsageChart').getContext('2d');
         
         // Create gorgeous neon gradient
@@ -90,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gradient.addColorStop(0, 'rgba(10, 132, 255, 0.85)');
         gradient.addColorStop(1, 'rgba(191, 90, 242, 0.25)');
 
-        const labels = Array.from({length: 24}, (_, i) => `${i}點`);
+        const labels = chartLabels || Array.from({length: 24}, (_, i) => `${i}點`);
 
         hourlyChart = new Chart(ctx, {
             type: 'bar',
@@ -171,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Fetch Summary
     function fetchSummary() {
-        fetch('/api/stats/summary')
+        fetch(`/api/stats/summary?range=${currentRange}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -248,14 +249,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Fetch Chart Data
     function fetchChartData() {
-        fetch('/api/stats/chart')
+        fetch(`/api/stats/chart?range=${currentRange}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     const minsData = data.chart_data.map(sec => Math.round(sec / 60));
                     if (!hourlyChart) {
-                        initChart(data.chart_data);
+                        initChart(data.chart_data, data.labels);
                     } else {
+                        hourlyChart.data.labels = data.labels || Array.from({length: 24}, (_, i) => `${i}點`);
                         hourlyChart.data.datasets[0].data = minsData;
                         hourlyChart.update();
                     }
@@ -265,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Fetch Apps List
     function fetchAppsData() {
-        fetch('/api/stats/apps')
+        fetch(`/api/stats/apps?range=${currentRange}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -278,11 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. Fetch Timeline
     function fetchTimelineData() {
-        fetch('/api/stats/timeline')
+        fetch(`/api/stats/timeline?range=${currentRange}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
                     // Process LIVE active app card status from timeline
+
                     if (data.timeline.length > 0) {
                         const latest = data.timeline[0];
                         const endT = new Date(latest.end_time);
@@ -849,6 +852,48 @@ document.addEventListener('DOMContentLoaded', () => {
                     alert('小工具操作失敗: ' + data.error);
                 }
             });
+    });
+
+    // ==========================================================================
+    // RANGE SELECTOR EVENTS
+    // ==========================================================================
+    const rangeBtns = document.querySelectorAll('.range-btn');
+    rangeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const range = btn.getAttribute('data-range');
+            
+            // Toggle active class
+            rangeBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            currentRange = range;
+            
+            // Update Card & Chart Titles
+            const totalTitle = document.getElementById('lbl-total-time-title');
+            const chartTitle = document.getElementById('lbl-chart-title');
+            const chartSubtitle = document.getElementById('lbl-chart-subtitle');
+            
+            if (range === 'today') {
+                totalTitle.innerText = '今日使用總時間';
+                chartTitle.innerText = '今日活動分佈';
+                chartSubtitle.innerText = '每小時使用時間分佈圖';
+            } else if (range === 'yesterday') {
+                totalTitle.innerText = '昨日使用總時間';
+                chartTitle.innerText = '昨日活動分佈';
+                chartSubtitle.innerText = '每小時使用時間分佈圖';
+            } else if (range === '7days') {
+                totalTitle.innerText = '過去 7 天使用總時間';
+                chartTitle.innerText = '過去 7 天活動分佈';
+                chartSubtitle.innerText = '每日使用時間分佈圖';
+            } else if (range === '30days') {
+                totalTitle.innerText = '過去 30 天使用總時間';
+                chartTitle.innerText = '過去 30 天活動分佈';
+                chartSubtitle.innerText = '每日使用時間分佈圖';
+            }
+            
+            // Refresh stats immediately
+            refreshData();
+        });
     });
 
     // Startup Init Checks

@@ -271,8 +271,8 @@ class DesktopWidget:
             self.lbl_app.configure(text=f"● 正在使用 {active_app} ({app_time_str})", fg=self.active_green)
             
             # Update category status hint
-            if category == "Education":
-                self.lbl_hint.configure(text="[🎓 教育]", fg="#64D2FF")  # Neon Cyan
+            if category == "學習":
+                self.lbl_hint.configure(text="[🎓 學習]", fg="#64D2FF")  # Neon Cyan
             elif category == "Entertainment & Media":
                 self.lbl_hint.configure(text="[🎮 娛樂]", fg="#FF453A")  # Neon Red
             else:
