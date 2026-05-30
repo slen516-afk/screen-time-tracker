@@ -179,16 +179,30 @@ def classify_content(app_name, window_title):
     title_lower = window_title.lower()
     app_lower = app_name.lower()
     
-    # Education Keywords (教育)
+    # Specific known applications take absolute priority
+    if app_lower in ["code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "antigravity ide.exe", "wsl.exe", "windows terminal.exe"]:
+        return "Education"
+        
+    if app_lower in ["spotify.exe", "vlc.exe", "netflix.exe", "steam.exe"]:
+        return "Entertainment & Media"
+        
+    if app_lower in ["discord.exe", "slack.exe", "teams.exe", "whatsapp.exe", "tg.exe"]:
+        return "Social & Communication"
+        
+    if app_lower in ["excel.exe", "winword.exe", "powerpnt.exe", "notepad.exe"]:
+        return "Productivity & Office"
+        
+    # Education Keywords (教育) - Cleaned for exact matching in window titles
     education_keywords = [
         "education", "tutorial", "lecture", "course", "learn", "study", "class", 
         "wikipedia", "github", "stackoverflow", "medium", "notion", "classroom", 
         "duolingo", "coursera", "edx", "udemy", "khan academy", "docs", "document", 
         "w3schools", "leetcode", "mdn", "python", "javascript", "c++", "java", 
         "教學", "學習", "課程", "歷史", "科學", "知識", "百科", "圖書館", "線上課",
-        "筆記", "研究", "論文", "研討會", "程式", "演算法", "機器學習", "開發","programming", "教授",
-        "English","物理","化學", "地質", "天文", "生物","電機", "國文", "英文", "微積分",
-        "清大","交大","成大","中央","中山","中正","中興","pinterest"," pinterest.com", "gemini.google.com", "loveable.com", "openai.com"
+        "筆記", "研究", "論文", "研討會", "程式", "演算法", "機器學習", "開發", "programming", "教授",
+        "english", "物理", "化學", "地質", "天文", "生物", "電機", "國文", "英文", "微積分",
+        "清大", "交大", "成大", "中央", "中山", "中正", "中興", 
+        "pinterest", "gemini", "lovable", "openai", "chatgpt", "claude"
     ]
     
     # Entertainment Keywords (娛樂)
@@ -202,7 +216,8 @@ def classify_content(app_name, window_title):
     
     is_browser = app_lower in ["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe"]
     
-    if is_browser or not app_lower:
+    # Check keywords for browser tabs and any other general apps (like unknown PWAs or browsers)
+    if is_browser or not app_lower or app_lower in ["explorer.exe", "applicationframehost.exe"]:
         # Check educational keywords first
         for kw in education_keywords:
             if kw in title_lower:
@@ -211,20 +226,9 @@ def classify_content(app_name, window_title):
         for kw in entertainment_keywords:
             if kw in title_lower:
                 return "Entertainment & Media"
-        return "Browsers"
-        
-    if app_lower in ["code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "antigravity ide.exe", "wsl.exe", "windows terminal.exe"]:
-        return "Education"
-        
-    if app_lower in ["spotify.exe", "vlc.exe", "netflix.exe", "steam.exe"]:
-        return "Entertainment & Media"
-        
-    if app_lower in ["discord.exe", "slack.exe", "teams.exe", "whatsapp.exe", "tg.exe"]:
-        return "Social & Communication"
-        
-    if app_lower in ["excel.exe", "winword.exe", "powerpnt.exe", "notepad.exe"]:
-        return "Productivity & Office"
-        
+        if is_browser:
+            return "Browsers"
+            
     # Fallback to general category in db
     try:
         conn = sqlite3.connect(DB_PATH)
