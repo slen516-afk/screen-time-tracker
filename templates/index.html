@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>螢幕使用時間 | ScreenTime PC</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- CSS Link -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon">⏳</div>
+                <h2>ScreenTime</h2>
+            </div>
+            <nav class="sidebar-menu">
+                <button class="menu-item active" data-tab="dashboard" id="btn-tab-dashboard">
+                    <i data-lucide="bar-chart-2"></i>
+                    <span>使用量儀表板</span>
+                </button>
+                <button class="menu-item" data-tab="limits" id="btn-tab-limits">
+                    <i data-lucide="shield-alert"></i>
+                    <span>應用使用限制</span>
+                </button>
+                <button class="menu-item" data-tab="timeline" id="btn-tab-timeline">
+                    <i data-lucide="clock"></i>
+                    <span>活動時間線</span>
+                </button>
+                <button class="menu-item" data-tab="settings" id="btn-tab-settings">
+                    <i data-lucide="settings"></i>
+                    <span>設定與管理</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="status-indicator">
+                    <span class="pulse-dot"></span>
+                    <span>監控引擎運行中</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Bar -->
+            <header class="top-header">
+                <div class="header-info">
+                    <h1 id="page-title">使用量儀表板</h1>
+                    <p class="current-date" id="lbl-current-date">載入中...</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" id="btn-toggle-widget">
+                        <i data-lucide="panels-top-left"></i>
+                        <span id="txt-widget-toggle">開啟桌面小工具</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- TAB 1: DASHBOARD -->
+            <section id="tab-dashboard" class="tab-panel active">
+                <div class="grid-layout">
+                    <!-- Stat Card: Total Screen Time -->
+                    <div class="card hero-card">
+                        <div class="card-header">
+                            <span class="card-title">今日使用總時間</span>
+                            <i data-lucide="hourglass" class="icon-accent-blue"></i>
+                        </div>
+                        <div class="hero-stats">
+                            <h2 class="huge-text" id="lbl-total-time">0h 00m</h2>
+                            <div class="stats-trend" id="lbl-trend-container">
+                                <span class="trend-badge" id="lbl-trend-badge">0%</span>
+                                <span class="trend-label" id="lbl-trend-label">較昨日</span>
+                            </div>
+                        </div>
+                        <div class="hero-bg-glow"></div>
+                    </div>
+
+                    <!-- Stat Card: Active App -->
+                    <div class="card glow-card">
+                        <div class="card-header">
+                            <span class="card-title">當前活躍應用</span>
+                            <span class="live-badge">LIVE</span>
+                        </div>
+                        <div class="active-app-status">
+                            <div class="active-app-icon" id="lbl-active-app-avatar">?</div>
+                            <div class="active-app-info">
+                                <h3 id="lbl-active-app-name">暫停中</h3>
+                                <p id="lbl-active-app-category">系統閒置中或鎖定</p>
+                            </div>
+                        </div>
+                        <div class="active-app-meta">
+                            <span id="lbl-active-app-duration">今日已用：0 分鐘</span>
+                        </div>
+                    </div>
+
+                    <!-- Stat Card: Digital Avatar -->
+                    <div class="card avatar-card">
+                        <div class="card-header">
+                            <span class="card-title">數位分身 (Digital Avatar)</span>
+                            <span class="avatar-badge badge-normal" id="lbl-avatar-badge">正常</span>
+                        </div>
+                        <div class="avatar-status-layout">
+                            <div class="avatar-image-container">
+                                <img src="/static/images/avatar_stage1.png" alt="Avatar" id="img-avatar">
+                            </div>
+                            <div class="avatar-info-details">
+                                <h3 id="lbl-avatar-name">載入中...</h3>
+                                <p class="avatar-level-label" id="lbl-avatar-stage">等級：1 / 5 (新手)</p>
+                                <p class="avatar-description" id="lbl-avatar-desc">讀書或寫程式可以進化分身，過度娛樂會導致分身萎靡...</p>
+                            </div>
+                        </div>
+                        <div class="avatar-meters">
+                            <div class="avatar-meter-row">
+                                <div class="meter-label-info">
+                                    <span>教育學習 EXP (30天)</span>
+                                    <span id="lbl-avatar-edu-time">0.0h</span>
+                                </div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill bg-Education" id="bar-avatar-edu" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div class="avatar-meter-row">
+                                <div class="meter-label-info">
+                                    <span>娛樂疲勞度</span>
+                                    <span id="lbl-avatar-ent-time">0.0h</span>
+                                </div>
+                                <div class="meter-bar">
+                                    <div class="meter-fill bg-Entertainment-Media" id="bar-avatar-ent" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="hero-bg-glow" style="background: radial-gradient(circle, rgba(100, 210, 255, 0.15) 0%, transparent 70%);"></div>
+                    </div>
+                </div>
+
+                <!-- Hourly usage Bar Chart -->
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <div>
+                            <span class="card-title">今日活動分佈</span>
+                            <p class="card-subtitle">每小時使用時間分佈圖</p>
+                        </div>
+                        <i data-lucide="trending-up"></i>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="hourlyUsageChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="dashboard-double-column">
+                    <!-- Top Apps List -->
+                    <div class="card list-card">
+                        <div class="card-header">
+                            <span class="card-title">最常使用應用程式</span>
+                            <i data-lucide="award"></i>
+                        </div>
+                        <div class="apps-list-container" id="list-top-apps">
+                            <!-- Populated by JS -->
+                            <div class="loading-spinner">載入數據中...</div>
+                        </div>
+                    </div>
+
+                    <!-- Category Breakdown -->
+                    <div class="card list-card">
+                        <div class="card-header">
+                            <span class="card-title">應用類別分佈</span>
+                            <i data-lucide="pie-chart"></i>
+                        </div>
+                        <div class="category-list-container" id="list-categories">
+                            <!-- Populated by JS -->
+                            <div class="loading-spinner">載入數據中...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: LIMITS -->
+            <section id="tab-limits" class="tab-panel">
+                <div class="card full-width-card">
+                    <div class="card-header border-bottom">
+                        <div>
+                            <span class="card-title">使用時間限制</span>
+                            <p class="card-subtitle">為特定的應用程式或類別設定每日使用時間限制。達到限制時將會收到桌面通知。</p>
+                        </div>
+                        <button class="btn btn-primary" id="btn-add-limit-modal">
+                            <i data-lucide="plus"></i>
+                            <span>新增使用限制</span>
+                        </button>
+                    </div>
+                    <div class="limits-list-container" id="list-active-limits">
+                        <!-- Populated by JS -->
+                        <div class="loading-spinner">載入限制清單中...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: TIMELINE -->
+            <section id="tab-timeline" class="tab-panel">
+                <div class="card full-width-card scrollable-card">
+                    <div class="card-header border-bottom">
+                        <div>
+                            <span class="card-title">今日活動歷程</span>
+                            <p class="card-subtitle">詳細記錄今天內各個時段所操作的視窗歷程，幫助您追蹤時間的具體流向。</p>
+                        </div>
+                        <i data-lucide="calendar"></i>
+                    </div>
+                    <div class="timeline-container">
+                        <div class="timeline-track" id="timeline-list">
+                            <!-- Populated by JS -->
+                            <div class="loading-spinner">載入活動歷程中...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: SETTINGS -->
+            <section id="tab-settings" class="tab-panel">
+                <div class="settings-grid">
+                    <!-- General Settings -->
+                    <div class="card">
+                        <div class="card-header border-bottom">
+                            <span class="card-title">核心系統設定</span>
+                            <i data-lucide="sliders"></i>
+                        </div>
+                        <div class="card-body">
+                            <form id="form-settings" class="settings-form">
+                                <div class="form-group">
+                                    <label for="input-idle-threshold">😴 智慧閒置判定時間（秒）</label>
+                                    <input type="number" id="input-idle-threshold" min="10" max="600" value="60" required>
+                                    <p class="form-desc">當偵測到滑鼠與鍵盤無動作超過此時間，將自動暫停計時，以維護數據精準度。</p>
+                                </div>
+                                <button type="submit" class="btn btn-primary mt-4">儲存設定</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Application Categorizer -->
+                    <div class="card col-span-2">
+                        <div class="card-header border-bottom">
+                            <span class="card-title">應用程式分類與重新命名</span>
+                            <i data-lucide="tag"></i>
+                        </div>
+                        <div class="app-categorizer-container">
+                            <p class="table-intro">您可以在此為已記錄的應用程式重新命名或自訂分類。這些更改將會即時套用到儀表板和圖表中。</p>
+                            <div class="table-responsive">
+                                <table class="settings-table">
+                                    <thead>
+                                        <tr>
+                                            <th>執行檔名稱</th>
+                                            <th>顯示名稱</th>
+                                            <th>應用程式類別</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="table-app-list">
+                                        <!-- Populated by JS -->
+                                        <tr>
+                                            <td colspan="4" class="text-center">載入應用程式列表中...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL: ADD LIMIT -->
+    <div class="modal-overlay" id="modal-add-limit">
+        <div class="modal-card animate-slide-up">
+            <div class="modal-header">
+                <h3>新增時間限制</h3>
+                <button class="btn-close-modal" id="btn-close-limit-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="form-add-limit" class="modal-form">
+                <div class="form-group">
+                    <label for="select-limit-type">限制對象類型</label>
+                    <select id="select-limit-type" required>
+                        <option value="app">單一應用程式 (.exe)</option>
+                        <option value="category">應用類別 (Category)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="group-select-app">
+                    <label for="select-limit-app">選擇應用程式</label>
+                    <select id="select-limit-app">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div class="form-group d-none" id="group-select-category">
+                    <label for="select-limit-category">選擇應用類別</label>
+                    <select id="select-limit-category">
+                        <option value="Browsers">Browsers (瀏覽器)</option>
+                        <option value="Developer Tools">Developer Tools (開發工具)</option>
+                        <option value="Social & Communication">Social & Communication (社群與通訊)</option>
+                        <option value="Entertainment & Media">Entertainment & Media (影音娛樂)</option>
+                        <option value="Productivity & Office">Productivity & Office (辦公生產力)</option>
+                        <option value="System">System (系統程式)</option>
+                        <option value="Education">Education (教育學習)</option>
+                        <option value="Others">Others (其他)</option>
+                    </select>
+                </div>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label for="input-limit-hours">時</label>
+                        <input type="number" id="input-limit-hours" min="0" max="23" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="input-limit-minutes">分</label>
+                        <input type="number" id="input-limit-minutes" min="0" max="59" value="0" required>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-limit-modal">取消</button>
+                    <button type="submit" class="btn btn-primary">新增限制</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: EDIT APP CONFIG -->
+    <div class="modal-overlay" id="modal-edit-app">
+        <div class="modal-card animate-slide-up">
+            <div class="modal-header">
+                <h3>編輯應用程式資訊</h3>
+                <button class="btn-close-modal" id="btn-close-app-modal">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <form id="form-edit-app" class="modal-form">
+                <input type="hidden" id="input-edit-app-name">
+                <div class="form-group">
+                    <label>執行檔檔名</label>
+                    <input type="text" id="lbl-edit-app-filename" disabled class="disabled-input">
+                </div>
+                <div class="form-group">
+                    <label for="input-edit-app-display">自訂顯示名稱</label>
+                    <input type="text" id="input-edit-app-display" required placeholder="例如：Google Chrome">
+                </div>
+                <div class="form-group">
+                    <label for="select-edit-app-category">分配應用類別</label>
+                    <select id="select-edit-app-category" required>
+                        <option value="Browsers">Browsers (瀏覽器)</option>
+                        <option value="Developer Tools">Developer Tools (開發工具)</option>
+                        <option value="Social & Communication">Social & Communication (社群與通訊)</option>
+                        <option value="Entertainment & Media">Entertainment & Media (影音娛樂)</option>
+                        <option value="Productivity & Office">Productivity & Office (辦公生產力)</option>
+                        <option value="System">System (系統程式)</option>
+                        <option value="Education">Education (教育學習)</option>
+                        <option value="Others">Others (其他)</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btn-cancel-app-modal">取消</button>
+                    <button type="submit" class="btn btn-primary">確認修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Script Link -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
