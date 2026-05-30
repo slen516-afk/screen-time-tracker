@@ -86,7 +86,7 @@ screentime for pc/
 本專案專為 **Windows** 作業系統設計，您只需要安裝 Python 3.8 或以上版本。
 
 ### 啟動步驟
-1. 開啟本專案資料夾 `c:\Users\User\Desktop\screentime for pc`。
+1. 開啟本專案資料夾。
 2. 雙擊執行 **`run.bat`**。
 3. 批次檔會自動執行：
    * 檢查並自動安裝 missing 依賴項（`Flask`, `psutil`, `plyer` 等）。
