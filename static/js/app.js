@@ -503,22 +503,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         limitsData.forEach(lim => {
             // Find current today's duration for this target
-            let usageSeconds = 0;
+            let usageSeconds = lim.usage_seconds || 0;
             let displayName = lim.target;
             let isCategory = lim.target.startsWith('category:');
+            let isSite = lim.target.startsWith('site:');
             let categoryName = 'Others';
+            let limitTypeLabel = 'App 限額';
 
             if (isCategory) {
                 const cat = lim.target.replace('category:', '');
                 categoryName = cat;
                 displayName = `${cat} 類別`;
-                usageSeconds = categoriesData[cat] || 0;
+                limitTypeLabel = 'Category 限額';
+            } else if (isSite) {
+                const site = lim.target.replace('site:', '');
+                categoryName = 'Browsers'; // Map to green color
+                displayName = `網站關鍵字：${site}`;
+                limitTypeLabel = 'Site 限額';
             } else {
                 const app = appsData.find(a => a.app_name === lim.target);
                 if (app) {
                     displayName = app.display_name;
                     categoryName = app.category;
-                    usageSeconds = app.duration;
                 } else {
                     displayName = lim.target.replace('.exe', '').toUpperCase();
                 }
@@ -539,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="limit-card-header">
                     <div class="limit-card-title">
                         <h4>${displayName}</h4>
-                        <span>${isCategory ? 'Category 限額' : 'App 限額'}</span>
+                        <span>${limitTypeLabel}</span>
                     </div>
                     <button class="btn-delete-limit" data-target="${lim.target}" title="刪除限制">
                         <i data-lucide="trash-2"></i>
@@ -610,18 +616,25 @@ document.addEventListener('DOMContentLoaded', () => {
         selectLimitType.value = 'app';
         groupSelectApp.classList.remove('d-none');
         groupSelectCategory.classList.add('d-none');
+        document.getElementById('group-input-site').classList.add('d-none');
     }
 
     btnCloseAddLimit.addEventListener('click', closeAddLimitModal);
     btnCancelAddLimit.addEventListener('click', closeAddLimitModal);
 
+    const groupInputSite = document.getElementById('group-input-site');
+
     selectLimitType.addEventListener('change', () => {
+        groupSelectApp.classList.add('d-none');
+        groupSelectCategory.classList.add('d-none');
+        groupInputSite.classList.add('d-none');
+        
         if (selectLimitType.value === 'app') {
             groupSelectApp.classList.remove('d-none');
-            groupSelectCategory.classList.add('d-none');
-        } else {
-            groupSelectApp.classList.add('d-none');
+        } else if (selectLimitType.value === 'category') {
             groupSelectCategory.classList.remove('d-none');
+        } else if (selectLimitType.value === 'site') {
+            groupInputSite.classList.remove('d-none');
         }
     });
 
@@ -637,8 +650,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('請先選擇一個應用程式！');
                 return;
             }
-        } else {
+        } else if (type === 'category') {
             target = `category:${document.getElementById('select-limit-category').value}`;
+        } else if (type === 'site') {
+            const siteVal = document.getElementById('input-limit-site').value.trim().toLowerCase();
+            if (!siteVal) {
+                alert('請輸入網站關鍵字！');
+                return;
+            }
+            target = `site:${siteVal}`;
         }
 
         const hrs = parseInt(document.getElementById('input-limit-hours').value) || 0;

@@ -248,12 +248,18 @@ bypasses_ignore_today = set()
 bypasses_one_more_minute = {}  # target -> expiration timestamp
 active_lockouts = set()         # Prevent multiple overlapping lockout popups, tracking active popups
 
-def is_target_locked(app_name, category):
+def is_target_locked(app_name, category, window_title):
     global active_lockouts
     if app_name in active_lockouts:
         return True
     if f"category:{category}" in active_lockouts:
         return True
+    # Check all active site lockouts against window_title
+    for locked in active_lockouts:
+        if locked.startswith("site:"):
+            site_kw = locked.replace("site:", "").lower()
+            if site_kw in window_title.lower():
+                return True
     return False
 
 def get_todays_usage(target):
@@ -269,6 +275,15 @@ def get_todays_usage(target):
             LEFT JOIN app_categories c ON l.app_name = c.app_name
             WHERE COALESCE(l.category, c.category) = ? AND date(l.start_time) = date('now', 'localtime')
             """, (cat_name,))
+            row = cursor.fetchone()
+            usage_seconds = row[0] if row and row[0] is not None else 0
+        elif target.startswith("site:"):
+            site_kw = target.replace("site:", "").lower()
+            cursor.execute("""
+            SELECT SUM(duration) 
+            FROM window_logs 
+            WHERE date(start_time) = date('now', 'localtime') AND LOWER(window_title) LIKE ?
+            """, (f"%{site_kw}%",))
             row = cursor.fetchone()
             usage_seconds = row[0] if row and row[0] is not None else 0
         else:
@@ -296,7 +311,7 @@ def check_app_lockout(hwnd, app_name, window_title):
         display_name, _ = get_app_metadata(app_name)
         
         # Check if this app/category is already undergoing a lockout popup
-        if is_target_locked(app_name, category):
+        if is_target_locked(app_name, category, window_title):
             # Just minimize again immediately to enforce lock
             ctypes.windll.user32.ShowWindow(hwnd, 6) # SW_MINIMIZE = 6
             return
@@ -304,11 +319,11 @@ def check_app_lockout(hwnd, app_name, window_title):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Find if there are limits set for this app or its category
+        # Find if there are limits set for this app, its category, or site keywords
         cursor.execute("""
         SELECT target, limit_seconds 
         FROM daily_limits 
-        WHERE target = ? OR target = ?
+        WHERE target = ? OR target = ? OR target LIKE 'site:%'
         """, (app_name, f"category:{category}"))
         
         limits = cursor.fetchall()
@@ -326,6 +341,12 @@ def check_app_lockout(hwnd, app_name, window_title):
                 if time.time() < bypasses_one_more_minute[target]:
                     continue
                     
+            # For site-specific limits, only enforce if the current window title matches
+            if target.startswith("site:"):
+                site_kw = target.replace("site:", "").lower()
+                if site_kw not in window_title.lower():
+                    continue
+                    
             # Check usage today
             usage_seconds = get_todays_usage(target)
             
@@ -336,6 +357,8 @@ def check_app_lockout(hwnd, app_name, window_title):
                 
                 # 2. Spawn lockout popup asynchronously in a separate thread
                 target_display = display_name if not target.startswith("category:") else category
+                if target.startswith("site:"):
+                    target_display = f"網站 {target.replace('site:', '')}"
                 
                 def run_lockout_async(t_val, t_disp, app_n):
                     global active_lockouts, bypasses_one_more_minute, bypasses_ignore_today
@@ -381,9 +404,6 @@ def check_limits_and_notify():
         cursor = conn.cursor()
         
         # Reset notified status if it is a new day
-        # In SQLite: check if there are entries from a different day. We can clear notification flags when we notice the date has changed.
-        # But a simpler way: just check today's usage. If usage is 0 or low, we can reset notified status.
-        # Let's reset notifications at midnight. We can keep track of the last reset date.
         today_str = datetime.date.today().isoformat()
         
         cursor.execute("SELECT key, value FROM settings WHERE key = 'last_reset_date'")
@@ -410,6 +430,16 @@ def check_limits_and_notify():
                 LEFT JOIN app_categories c ON l.app_name = c.app_name
                 WHERE COALESCE(l.category, c.category) = ? AND date(l.start_time) = date('now', 'localtime')
                 """, (cat_name,))
+                row = cursor.fetchone()
+                usage_seconds = row[0] if row and row[0] is not None else 0
+            elif target.startswith("site:"):
+                site_kw = target.replace("site:", "")
+                display_name = f"網站 {site_kw}"
+                cursor.execute("""
+                SELECT SUM(duration) 
+                FROM window_logs 
+                WHERE date(start_time) = date('now', 'localtime') AND LOWER(window_title) LIKE ?
+                """, (f"%{site_kw.lower()}%",))
                 row = cursor.fetchone()
                 usage_seconds = row[0] if row and row[0] is not None else 0
             else:

@@ -291,6 +291,7 @@
                     <select id="select-limit-type" required>
                         <option value="app">單一應用程式 (.exe)</option>
                         <option value="category">應用類別 (Category)</option>
+                        <option value="site">特定網站 / 網頁關鍵字 (Website)</option>
                     </select>
                 </div>
                 <div class="form-group" id="group-select-app">
@@ -311,6 +312,11 @@
                         <option value="Education">Education (教育學習)</option>
                         <option value="Others">Others (其他)</option>
                     </select>
+                </div>
+                <div class="form-group d-none" id="group-input-site">
+                    <label for="input-limit-site">輸入網站關鍵字（小寫，如：facebook）</label>
+                    <input type="text" id="input-limit-site" placeholder="例如：facebook、youtube、pinterest">
+                    <p class="form-desc" style="font-size:11px; margin-top:4px;">系統會自動追蹤與鎖定瀏覽器分頁標題中含有此字眼的活動時間。</p>
                 </div>
                 <div class="form-group-row">
                     <div class="form-group">

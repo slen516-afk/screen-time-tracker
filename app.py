@@ -246,7 +246,49 @@ def handle_limits():
         if request.method == "GET":
             cursor.execute("SELECT target, limit_seconds FROM daily_limits")
             rows = cursor.fetchall()
-            limits_data = [{"target": row["target"], "limit_seconds": row["limit_seconds"]} for row in rows]
+            limits_data = []
+            
+            for row in rows:
+                target = row["target"]
+                limit_seconds = row["limit_seconds"]
+                usage_seconds = 0
+                
+                if target.startswith("category:"):
+                    cat_name = target.replace("category:", "")
+                    cursor.execute("""
+                    SELECT SUM(l.duration) 
+                    FROM window_logs l
+                    LEFT JOIN app_categories c ON l.app_name = c.app_name
+                    WHERE COALESCE(l.category, c.category) = ? AND date(l.start_time) = date('now', 'localtime')
+                    """, (cat_name,))
+                    u_row = cursor.fetchone()
+                    usage_seconds = u_row[0] if u_row and u_row[0] is not None else 0
+                    
+                elif target.startswith("site:"):
+                    site_kw = target.replace("site:", "").lower()
+                    cursor.execute("""
+                    SELECT SUM(duration) 
+                    FROM window_logs 
+                    WHERE date(start_time) = date('now', 'localtime') AND LOWER(window_title) LIKE ?
+                    """, (f"%{site_kw}%",))
+                    u_row = cursor.fetchone()
+                    usage_seconds = u_row[0] if u_row and u_row[0] is not None else 0
+                    
+                else:
+                    cursor.execute("""
+                    SELECT SUM(duration) 
+                    FROM window_logs 
+                    WHERE app_name = ? AND date(start_time) = date('now', 'localtime')
+                    """, (target,))
+                    u_row = cursor.fetchone()
+                    usage_seconds = u_row[0] if u_row and u_row[0] is not None else 0
+                    
+                limits_data.append({
+                    "target": target,
+                    "limit_seconds": limit_seconds,
+                    "usage_seconds": usage_seconds
+                })
+                
             conn.close()
             return jsonify({"success": True, "limits": limits_data})
             
@@ -422,33 +464,33 @@ def get_character_stats():
         # Evolution Logic based on Education hours
         # Levels: 1 to 5
         level = 1
-        stage_title = "初階數碼蛋"
-        description = "剛出生的初階數位分身，充滿對新事物的渴望，需要多進行教育學習或寫程式來進化。"
+        stage_title = "初階使用者"
+        description = "已建立螢幕時間管理基礎，建議透過增加教育學習與開發時間來提升分身狀態。"
         next_threshold = 5.0
         prev_threshold = 0.0
         
         if edu_hours >= 100.0:
             level = 5
-            stage_title = "終極數位真神"
-            description = "超越肉體凡胎，化身為掌控網絡底層架構的至高數位真神，智慧之光普照整個網絡世界。"
+            stage_title = "卓越時間管理大師"
+            description = "時間管理的典範，高度平衡學習與效率，將自律轉化為日常習慣，達成極佳的數位生產力目標。"
             next_threshold = 100.0
             prev_threshold = 100.0
         elif edu_hours >= 50.0:
             level = 4
-            stage_title = "星際科技賢者"
-            description = "大腦已與量子雲端進行神經連結，能隨意編織星雲般的代碼，通曉數據演變的大道法則。"
+            stage_title = "深度專注專家"
+            description = "展現高強度的自律性，能長時間維持高度集中的專注狀態，系統性地累積深度的知識技能。"
             next_threshold = 100.0
             prev_threshold = 50.0
         elif edu_hours >= 20.0:
             level = 3
-            stage_title = "數據編譯大法師"
-            description = "能夠流暢編寫各類程式，操縱多維度虛擬程式面板，對演算法的理解達到爐火純青的境界。"
+            stage_title = "效率實踐者"
+            description = "擁有良好的專注度與時間分配能力，在學習、程式開發或辦公生產力上展現出優異的執行力。"
             next_threshold = 50.0
             prev_threshold = 20.0
         elif edu_hours >= 5.0:
             level = 2
-            stage_title = "自學機器人"
-            description = "已經開始吸收大量基礎知識，手臂裝備了初階編譯器，眼神中透露著智慧的光芒。"
+            stage_title = "自主學習者"
+            description = "已具備基本的學習規律與自我要求，能持續穩定地累積教育與技術開發時間。"
             next_threshold = 20.0
             prev_threshold = 5.0
             
@@ -475,8 +517,8 @@ def get_character_stats():
         
         if is_weakened:
             status = "weakened"
-            stage_title = "沙發土豆 (萎靡狀態)"
-            description = "過度影音娛樂！分身正癱在沙發上吃洋芋片看劇，雙眼失神、數據嚴重溢出...快去進行教育學習來喚醒他！"
+            stage_title = "過度娛樂 (注意偏離)"
+            description = "檢測到近期娛樂與社群時數偏高。適度的放鬆有助於恢復專注，但建議安排適當的學習或工作時間以重新激活分身狀態。"
             image_name = "avatar_weakened.png"
         elif level >= 4:
             status = "strong"
