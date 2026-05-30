@@ -192,6 +192,60 @@ def classify_content(app_name, window_title):
     if app_lower in ["excel.exe", "winword.exe", "powerpnt.exe", "notepad.exe"]:
         return "Productivity & Office"
         
+    # --- Special Fine-Grained Classification for Social Platforms ---
+    # Detects if browsing Facebook, Instagram, or Pinterest
+    is_social_platform = False
+    matched_platform = None
+    
+    for platform in ["facebook", "instagram", "pinterest", "fb.com", "ig.com"]:
+        if platform in title_lower or platform in app_lower:
+            is_social_platform = True
+            matched_platform = platform
+            break
+            
+    # Also support boundary matched short-forms "fb" or "ig" in browser titles
+    if not is_social_platform:
+        import re
+        if re.search(r'\b(fb|ig)\b', title_lower):
+            is_social_platform = True
+            matched_platform = "facebook" if "fb" in title_lower else "instagram"
+            
+    if is_social_platform:
+        # Fine-grained educational, art/drawing, or artwork/creations keywords for social platforms
+        social_edu_keywords = [
+            "教學", "學習", "課程", "教育", "知識", "科普", "研究", "程式", "開發", "演算法", "技術",
+            "畫畫", "繪畫", "插畫", "速寫", "素描", "水彩", "油畫", "電繪", "塗鴉", "手繪", "動漫教學", 
+            "漫畫教學", "藝術", "設計", "筆記", "論文", "歷史", "科學", "物理", "化學", "生物", "英文", 
+            "數學", "微積分", "寫生", "美工", "臨摹", "勾線", "上色", "配色", "透視", "人體結構", "厚塗",
+            "作品", "創作", "畫作", "畫集", "作品集", "畫廊", "插圖", "原創", "同人", "二創", "草稿", 
+            "線稿", "落書", "板繪", "繪師", "插畫家", "藝術家", "畫師", "設計師",
+            "education", "tutorial", "lecture", "course", "learn", "study", "class", "classroom",
+            "art", "paint", "drawing", "sketch", "illustration", "design", "watercolor", "acrylic",
+            "oil painting", "digital art", "doodle", "procreate", "photoshop", "illustrator",
+            "clip studio", "krita", "anatomy", "perspective", "shading", "speedpaint", "speed drawing",
+            "portfolio", "artwork", "gallery", "fanart", "creation", "creative", "artist", "designer",
+            "painting", "drawings", "paintings", "illustrations", "concept art", "character design",
+            "charadesign", "cg"
+        ]
+        
+        has_edu_content = False
+        for kw in social_edu_keywords:
+            if kw in title_lower:
+                has_edu_content = True
+                break
+                
+        if has_edu_content:
+            return "Education"
+        else:
+            # Fallback to non-education categories
+            if matched_platform in ["facebook", "fb.com"]:
+                return "Social & Communication"
+            elif matched_platform in ["instagram", "ig.com"]:
+                return "Social & Communication"
+            elif matched_platform in ["pinterest"]:
+                return "Entertainment & Media"
+            return "Social & Communication"
+
     # Education Keywords (教育) - Cleaned for exact matching in window titles
     education_keywords = [
         "education", "tutorial", "lecture", "course", "learn", "study", "class", 
@@ -202,13 +256,22 @@ def classify_content(app_name, window_title):
         "筆記", "研究", "論文", "研討會", "程式", "演算法", "機器學習", "開發", "programming", "教授",
         "english", "物理", "化學", "地質", "天文", "生物", "電機", "國文", "英文", "微積分",
         "清大", "交大", "成大", "中央", "中山", "中正", "中興", 
-        "pinterest", "gemini", "lovable", "openai", "chatgpt", "claude"
+        "gemini", "lovable", "openai", "chatgpt", "claude",
+        # Art/Drawing & Creations
+        "畫畫", "繪畫", "插畫", "速寫", "素描", "水彩", "油畫", "電繪", "塗鴉", "手繪", "動漫教學", 
+        "漫畫教學", "藝術", "設計", "寫生", "美工", "臨摹", "勾線", "上色", "配色", "透視", "人體結構", 
+        "厚塗", "繪畫過程", "繪製", "畫作", "插圖", "原創", "草稿", "線稿", "落書", "板繪", 
+        "繪師", "插畫家", "藝術家", "畫師", "設計師", "作品集",
+        "art", "paint", "drawing", "sketch", "illustration", "design", "watercolor", "acrylic",
+        "oil painting", "digital art", "doodle", "procreate", "photoshop", "illustrator",
+        "clip studio", "krita", "anatomy", "perspective", "shading", "speedpaint", "speed drawing",
+        "portfolio", "artwork"
     ]
     
     # Entertainment Keywords (娛樂)
     entertainment_keywords = [
         "netflix", "youtube", "twitch", "spotify", "disney", "anime", "manga", 
-        "game", "play", "steam", "bilibili", "facebook", "instagram", "reddit", 
+        "game", "play", "steam", "bilibili", "reddit", 
         "twitter", "baha", "gamer", "vlc", "music", "pop", "rock", "song", "video", 
         "娛樂", "影音", "遊戲", "動漫", "漫畫", "音樂", "電影", "追劇", "巴哈姆特",
         "直播", "實況", "社群", "臉書", "推特", "抖音", "tiktok"
