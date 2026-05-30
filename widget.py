@@ -72,6 +72,16 @@ class DesktopWidget:
         )
         self.lbl_title.pack(side=tk.LEFT)
         
+        # Category/Status Hint Label
+        self.lbl_hint = tk.Label(
+            self.header_frame, 
+            text="", 
+            font=("Segoe UI", 8, "bold"), 
+            bg=self.bg_color, 
+            fg=self.text_secondary
+        )
+        self.lbl_hint.pack(side=tk.LEFT, padx=(10, 0))
+        
         self.lbl_pin = tk.Label(
             self.header_frame, 
             text="📌 釘選", 
@@ -167,7 +177,7 @@ class DesktopWidget:
         
     def get_todays_stats(self):
         if not os.path.exists(DB_PATH):
-            return 0, "無資料", 0
+            return 0, "無資料", 0, "Others"
             
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -182,9 +192,9 @@ class DesktopWidget:
             total_sec_row = cursor.fetchone()
             total_seconds = total_sec_row[0] if total_sec_row and total_sec_row[0] is not None else 0
             
-            # Latest active application session
+            # Latest active application session (including category)
             cursor.execute("""
-            SELECT app_name, window_title 
+            SELECT app_name, window_title, category 
             FROM window_logs 
             ORDER BY id DESC LIMIT 1
             """)
@@ -192,6 +202,8 @@ class DesktopWidget:
             
             if last_app_row:
                 active_app = last_app_row[0]
+                category = last_app_row[2] or "Others"
+                
                 # Check if this app was active recently (within last 15 seconds) to ensure it's "currently active"
                 # If the tracker is offline or we are idle, show "Idle/Away"
                 cursor.execute("""
@@ -210,7 +222,7 @@ class DesktopWidget:
                         
                 if not is_currently_active:
                     conn.close()
-                    return total_seconds, "暫停中 (閒置/鎖定)", 0
+                    return total_seconds, "暫停中 (閒置/鎖定)", 0, "Others"
                 
                 # Get human readable display name
                 cursor.execute("SELECT display_name FROM app_categories WHERE app_name = ?", (active_app,))
@@ -227,16 +239,16 @@ class DesktopWidget:
                 app_total_seconds = app_total_row[0] if app_total_row and app_total_row[0] is not None else 0
                 
                 conn.close()
-                return total_seconds, display_name, app_total_seconds
+                return total_seconds, display_name, app_total_seconds, category
             else:
                 conn.close()
-                return total_seconds, "無活動", 0
+                return total_seconds, "無活動", 0, "Others"
         except Exception as e:
             print(f"Widget DB error: {e}", file=sys.stderr)
-            return 0, "錯誤", 0
+            return 0, "錯誤", 0, "Others"
 
     def update_data(self):
-        total_sec, active_app, app_sec = self.get_todays_stats()
+        total_sec, active_app, app_sec, category = self.get_todays_stats()
         
         # Format total time
         total_hours = total_sec // 3600
@@ -246,6 +258,7 @@ class DesktopWidget:
         # Format active app detail
         if active_app in ["暫停中 (閒置/鎖定)", "無活動", "錯誤"]:
             self.lbl_app.configure(text=f"● {active_app}", fg=self.text_secondary)
+            self.lbl_hint.configure(text="[💤 閒置]", fg=self.text_secondary)
         else:
             app_hours = app_sec // 3600
             app_mins = (app_sec % 3600) // 60
@@ -256,6 +269,14 @@ class DesktopWidget:
                 active_app = active_app[:13] + "..."
                 
             self.lbl_app.configure(text=f"● 正在使用 {active_app} ({app_time_str})", fg=self.active_green)
+            
+            # Update category status hint
+            if category == "Education":
+                self.lbl_hint.configure(text="[🎓 教育]", fg="#64D2FF")  # Neon Cyan
+            elif category == "Entertainment & Media":
+                self.lbl_hint.configure(text="[🎮 娛樂]", fg="#FF453A")  # Neon Red
+            else:
+                self.lbl_hint.configure(text="[⚙️ 其他]", fg="#AEAEB2")  # Muted Grey
             
         # Poll again in 1 second
         self.root.after(1000, self.update_data)

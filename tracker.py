@@ -188,7 +188,7 @@ def classify_content(app_name, window_title):
         "教學", "學習", "課程", "歷史", "科學", "知識", "百科", "圖書館", "線上課",
         "筆記", "研究", "論文", "研討會", "程式", "演算法", "機器學習", "開發","programming", "教授",
         "English","物理","化學", "地質", "天文", "生物","電機", "國文", "英文", "微積分",
-        "清大","交大","成大","中央","中山","中正","中興","pinterest"," pinterest.com"
+        "清大","交大","成大","中央","中山","中正","中興","pinterest"," pinterest.com", "gemini.google.com", "loveable.com", "openai.com"
     ]
     
     # Entertainment Keywords (娛樂)
