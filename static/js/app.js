@@ -709,6 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (data.success) {
                     inputIdleThreshold.value = data.idle_threshold;
                     document.getElementById('input-gemini-key').value = data.gemini_api_key || '';
+                    document.getElementById('check-widget-startup').checked = data.auto_start_widget || false;
                     renderAppCategorizerTable();
                 }
             });
@@ -727,13 +728,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const threshold = parseInt(inputIdleThreshold.value);
         const geminiKey = document.getElementById('input-gemini-key').value.trim();
         const startupEnabled = document.getElementById('check-startup-toggle').checked;
+        const autoStartWidget = document.getElementById('check-widget-startup').checked;
 
         const saveSettingsPromise = fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 idle_threshold: threshold,
-                gemini_api_key: geminiKey
+                gemini_api_key: geminiKey,
+                auto_start_widget: autoStartWidget
             })
         }).then(res => res.json());
 

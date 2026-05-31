@@ -21,3 +21,7 @@ ENV/
 *.njsproj
 *.sln
 *.swp
+
+# Local Generated files
+screentime_startup.vbs
+startup_log.txt

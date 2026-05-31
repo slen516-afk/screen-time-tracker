@@ -440,6 +440,11 @@ def handle_settings():
             row_key = cursor.fetchone()
             gemini_api_key = row_key[0] if row_key else ""
             
+            # Query auto-start widget setting
+            cursor.execute("SELECT value FROM settings WHERE key = 'auto_start_widget'")
+            row_widget = cursor.fetchone()
+            auto_start_widget = (row_widget[0] == "true") if row_widget else False
+            
             # Also return list of all unique categories in system
             cursor.execute("SELECT DISTINCT category FROM app_categories")
             cats = [r["category"] for r in cursor.fetchall()]
@@ -449,6 +454,7 @@ def handle_settings():
                 "success": True, 
                 "idle_threshold": idle_threshold,
                 "gemini_api_key": gemini_api_key,
+                "auto_start_widget": auto_start_widget,
                 "available_categories": cats
             })
             
@@ -456,6 +462,7 @@ def handle_settings():
             data = request.get_json()
             idle_threshold = data.get("idle_threshold")
             gemini_api_key = data.get("gemini_api_key")
+            auto_start_widget = data.get("auto_start_widget")
             
             if idle_threshold is not None:
                 if float(idle_threshold) <= 0:
@@ -465,6 +472,10 @@ def handle_settings():
             if gemini_api_key is not None:
                 cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('gemini_api_key', ?)", (str(gemini_api_key),))
                 
+            if auto_start_widget is not None:
+                val = "true" if auto_start_widget else "false"
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('auto_start_widget', ?)", (val,))
+                
             conn.commit()
             conn.close()
             return jsonify({"success": True, "message": "Settings updated"})
@@ -472,38 +483,70 @@ def handle_settings():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# 7.5 Silent Startup Toggle Manager (VBS launch in shell:startup)
-def get_startup_vbs_path():
-    startup_dir = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
-    return os.path.join(startup_dir, "screentime_startup.vbs")
-
+# 7.5 Silent Startup Toggle Manager (Registry Run Key + project VBS launch)
 @app.route("/api/settings/startup", methods=["GET", "POST"])
 def handle_startup_toggle():
+    import winreg
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    vbs_path = os.path.join(project_dir, "screentime_startup.vbs")
+    
+    # Old Startup folder path for cleanup
+    old_startup_dir = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+    old_vbs_path = os.path.join(old_startup_dir, "screentime_startup.vbs")
+    
     try:
-        vbs_path = get_startup_vbs_path()
         if request.method == "GET":
-            is_enabled = os.path.exists(vbs_path)
+            is_enabled = False
+            try:
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
+                winreg.QueryValueEx(key, "ScreenTimePC")
+                winreg.CloseKey(key)
+                is_enabled = os.path.exists(vbs_path)
+            except FileNotFoundError:
+                pass
             return jsonify({"success": True, "enabled": is_enabled})
             
         elif request.method == "POST":
             data = request.get_json() or {}
             enable = data.get("enable", False)
             
+            # Clean up old Startup folder script to avoid double-boot conflicts
+            if os.path.exists(old_vbs_path):
+                try:
+                    os.remove(old_vbs_path)
+                except Exception:
+                    pass
+            
             if enable:
-                run_bat_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run.bat")
+                run_bat_path = os.path.join(project_dir, "run.bat")
                 vbs_content = (
                     'Set WshShell = CreateObject("WScript.Shell")\n'
                     f'WshShell.Run Chr(34) & "{run_bat_path}" & Chr(34), 0\n'
                     'Set WshShell = Nothing\n'
                 )
-                os.makedirs(os.path.dirname(vbs_path), exist_ok=True)
                 with open(vbs_path, "w", encoding="utf-8") as f:
                     f.write(vbs_content)
-                return jsonify({"success": True, "enabled": True, "message": "已啟用開機自動啟動項目"})
+                
+                # Register in HKEY_CURRENT_USER Run Key
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+                value = f'wscript.exe "{vbs_path}"'
+                winreg.SetValueEx(key, "ScreenTimePC", 0, winreg.REG_SZ, value)
+                winreg.CloseKey(key)
+                return jsonify({"success": True, "enabled": True, "message": "已啟用開機自動背景啟動 (登錄檔方式)"})
             else:
+                # Remove from Registry
+                try:
+                    key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+                    winreg.DeleteValue(key, "ScreenTimePC")
+                    winreg.CloseKey(key)
+                except FileNotFoundError:
+                    pass
+                
+                # Delete VBS file from project folder
                 if os.path.exists(vbs_path):
                     os.remove(vbs_path)
-                return jsonify({"success": True, "enabled": False, "message": "已關閉開機自動啟動項目"})
+                return jsonify({"success": True, "enabled": False, "message": "已關閉開機自動背景啟動"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -659,11 +702,6 @@ def get_character_stats():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# --- Auto Browser Launch Thread ---
-def launch_browser():
-    time.sleep(1.5)  # Wait for Flask to boot up
-    webbrowser.open("http://127.0.0.1:5000")
-
 if __name__ == "__main__":
     # Ensure database is set up
     init_db()
@@ -673,10 +711,26 @@ if __name__ == "__main__":
     tracker_thread = threading.Thread(target=run_tracker, args=(stop_event,), daemon=True)
     tracker_thread.start()
     
-    # 2. Trigger auto-browser open in a thread
-    browser_thread = threading.Thread(target=launch_browser, daemon=True)
-    browser_thread.start()
-    
+    # 2.5 Auto-start desktop widget if setting is enabled
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM settings WHERE key = 'auto_start_widget'")
+        row_widget = cursor.fetchone()
+        conn.close()
+        if row_widget and row_widget[0] == "true":
+            print("Auto-starting desktop widget...")
+            widget_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "widget.py")
+            if sys.platform == "win32":
+                widget_process = subprocess.Popen(
+                    [sys.executable, widget_script],
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+            else:
+                widget_process = subprocess.Popen([sys.executable, widget_script])
+    except Exception as e:
+        print(f"Error auto-starting desktop widget: {e}")
+        
     # 3. Start Flask app
     try:
         app.run(host="127.0.0.1", port=5000, debug=False)
