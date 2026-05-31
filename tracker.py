@@ -131,13 +131,22 @@ def get_setting(key, default):
     except Exception:
         return default
 
+LAST_GEMINI_ERROR_TIME = 0.0
+
 # --- Gemini AI Classification Helper ---
 def classify_with_gemini(title, api_key):
+    global LAST_GEMINI_ERROR_TIME
     import urllib.request
+    import urllib.error
     import json
     import sys
+    import time
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    current_time = time.time()
+    if current_time - LAST_GEMINI_ERROR_TIME < 60:
+        return None
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     
     prompt = (
         "You are a professional video and webpage classifier. Classify the following title into exactly one of these categories:\n"
@@ -192,8 +201,27 @@ def classify_with_gemini(title, api_key):
                 return "Productivity & Office"
                 
             return None
+    except urllib.error.HTTPError as e:
+        LAST_GEMINI_ERROR_TIME = current_time
+        err_msg = ""
+        try:
+            err_body = json.loads(e.read().decode("utf-8"))
+            err_msg = err_body.get("error", {}).get("message", "")
+        except Exception:
+            pass
+            
+        if e.code == 404:
+            print(f"[Gemini AI] 錯誤 404: 找不到此模型或金鑰不支援此模型。已自動冷卻 60 秒。({err_msg})", file=sys.stderr)
+        elif e.code == 429:
+            print(f"[Gemini AI] 錯誤 429: 額度已達上限/超出限制 (Quota Exceeded)。請至 Google AI Studio 申請免費金鑰，或檢查帳單設定。已自動冷卻 60 秒。({err_msg})", file=sys.stderr)
+        elif e.code == 403:
+            print(f"[Gemini AI] 錯誤 403: 權限不足或 API 金鑰無效。請確認金鑰正確性。已自動冷卻 60 秒。({err_msg})", file=sys.stderr)
+        else:
+            print(f"[Gemini AI] 錯誤 {e.code}: {e.reason}。已自動冷卻 60 秒。({err_msg})", file=sys.stderr)
+        return None
     except Exception as e:
-        print(f"Gemini AI Classification error: {e}", file=sys.stderr)
+        LAST_GEMINI_ERROR_TIME = current_time
+        print(f"[Gemini AI] 分類失敗: {e}。已自動冷卻 60 秒。", file=sys.stderr)
         return None
 
 
@@ -412,7 +440,8 @@ def classify_content(app_name, window_title):
             "clip studio", "krita", "anatomy", "perspective", "shading", "speedpaint", "speed drawing",
             "portfolio", "artwork", "how to draw", "how to paint", "programming", "coding",
             "calculator", "math", "english learning", "history", "science", "ted", "tedx",
-            "crash course", "lecture", "class"
+            "crash course", "lecture", "class", "python", "javascript", "c++", "java", "html",
+            "css", "rust", "sql", "github", "vscode", "git", "leetcode", "compiler"
         ]
         for kw in video_education_keywords:
             if kw in title_lower:
