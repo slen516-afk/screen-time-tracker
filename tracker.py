@@ -97,6 +97,14 @@ def init_db():
     )
     """)
     
+    # 5. title_classifications (AI Classification Cache)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS title_classifications (
+        title TEXT PRIMARY KEY,
+        category TEXT
+    )
+    """)
+    
     # Default idle threshold
     cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('idle_threshold', ?)", (str(DEFAULT_IDLE_THRESHOLD),))
     
@@ -122,6 +130,72 @@ def get_setting(key, default):
         return row[0] if row else default
     except Exception:
         return default
+
+# --- Gemini AI Classification Helper ---
+def classify_with_gemini(title, api_key):
+    import urllib.request
+    import json
+    import sys
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    
+    prompt = (
+        "You are a professional video and webpage classifier. Classify the following title into exactly one of these categories:\n"
+        "- '學習' (Educational channels, tutorials, study, coding, programming, learning languages, physics, calculus, lecture notes, science, design tutorials, art sketching/painting process)\n"
+        "- 'Entertainment & Media' (Gaming streams, netflix, anime, music videos, pop songs, vlogs, entertainment, entertainment shows)\n"
+        "- 'Productivity & Office' (Notion tutorials, excel/word office skills, time management, scheduling)\n"
+        "- 'Others' (Generic search pages, blank pages, generic sites)\n\n"
+        f"Title: \"{title}\"\n\n"
+        "Return ONLY the exact category string from: '學習', 'Entertainment & Media', 'Productivity & Office', 'Others'. "
+        "Do not include any explanation, punctuation, or extra spaces. Keep it as a simple string."
+    )
+    
+    headers = {
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ]
+    }
+    
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=6) as response:
+            res_data = json.loads(response.read().decode("utf-8"))
+            candidate = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            
+            candidate_clean = candidate.replace("'", "").replace('"', "").strip()
+            
+            valid_categories = ["學習", "Entertainment & Media", "Productivity & Office", "Others"]
+            for cat in valid_categories:
+                if cat.lower() in candidate_clean.lower():
+                    return cat
+                    
+            if "學習" in candidate_clean or "learn" in candidate_clean.lower() or "edu" in candidate_clean.lower():
+                return "學習"
+            elif "entertainment" in candidate_clean.lower() or "media" in candidate_clean.lower() or "music" in candidate_clean.lower() or "game" in candidate_clean.lower():
+                return "Entertainment & Media"
+            elif "productivity" in candidate_clean.lower() or "office" in candidate_clean.lower():
+                return "Productivity & Office"
+                
+            return None
+    except Exception as e:
+        print(f"Gemini AI Classification error: {e}", file=sys.stderr)
+        return None
+
 
 # --- Windows API Functions ---
 def get_foreground_window():
@@ -264,6 +338,57 @@ def classify_content(app_name, window_title):
         is_video_platform = True
         
     if is_video_platform:
+        # --- Gemini AI Title Classification with local SQLite Cache ---
+        api_key = None
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM settings WHERE key = 'gemini_api_key'")
+            row = cursor.fetchone()
+            conn.close()
+            if row and row[0] and row[0].strip():
+                api_key = row[0].strip()
+        except Exception:
+            pass
+            
+        if api_key:
+            # Clean title of browser suffixes for higher AI classification accuracy
+            clean_title = window_title
+            for suffix in [" - YouTube", " - Google Chrome", " - Microsoft Edge", " - Mozilla Firefox", " - Brave"]:
+                clean_title = clean_title.replace(suffix, "")
+            clean_title = clean_title.strip()
+            
+            # Check SQLite Cache first
+            cached_category = None
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute("SELECT category FROM title_classifications WHERE title = ?", (clean_title,))
+                row_cache = cursor.fetchone()
+                conn.close()
+                if row_cache:
+                    cached_category = row_cache[0]
+            except Exception:
+                pass
+                
+            if cached_category:
+                return cached_category
+                
+            # Query Gemini API
+            ai_category = classify_with_gemini(clean_title, api_key)
+            if ai_category:
+                # Save to Cache
+                try:
+                    conn = sqlite3.connect(DB_PATH)
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT OR REPLACE INTO title_classifications (title, category) VALUES (?, ?)", (clean_title, ai_category))
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+                return ai_category
+
+        # --- Rule-Based Fallback ---
         # 1. Check for Productivity & Office keywords (excel, word, notion, productivity hacks, etc.)
         video_productivity_keywords = [
             "excel", "word", "powerpoint", "ppt", "notion", "outlook", "office", "productivity", 

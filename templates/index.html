@@ -246,7 +246,19 @@
                                     <input type="number" id="input-idle-threshold" min="10" max="600" value="60" required>
                                     <p class="form-desc">當偵測到滑鼠與鍵盤無動作超過此時間，將自動暫停計時，以維護數據精準度。</p>
                                 </div>
-                                <button type="submit" class="btn btn-primary mt-4">儲存設定</button>
+                                <div class="form-group" style="margin-top: 15px;">
+                                    <label for="input-gemini-key">🤖 Gemini AI 智慧網頁與影片分類 API 金鑰</label>
+                                    <input type="password" id="input-gemini-key" placeholder="輸入您的 Gemini API 金鑰（選填，留空將退回關鍵字分類）" style="width: 100%; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: white; font-family: var(--font-body); margin-top: 6px;">
+                                    <p class="form-desc" style="margin-top: 4px;">啟用後，系統將自動調用 Gemini AI 對 YouTube/Bilibili 等網頁進行精準語意分析，並將結果快取於本地資料庫中。</p>
+                                </div>
+                                <div class="form-group" style="margin-top: 15px; display: flex; align-items: flex-start; gap: 8px;">
+                                    <input type="checkbox" id="check-startup-toggle" style="width: 18px; height: 18px; margin-top: 2px; cursor: pointer;">
+                                    <div>
+                                        <label for="check-startup-toggle" style="font-weight: 500; cursor: pointer;">🚀 啟用 Windows 開機自動背景啟動</label>
+                                        <p class="form-desc" style="margin-top: 2px;">開機時將會在背景自動、完全靜默啟動監控程式與 Web 伺服器，不彈出多餘的黑命令行視窗。</p>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary mt-4" style="margin-top: 20px;">儲存設定</button>
                             </form>
                         </div>
                     </div>

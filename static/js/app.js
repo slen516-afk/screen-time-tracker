@@ -708,7 +708,16 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 if (data.success) {
                     inputIdleThreshold.value = data.idle_threshold;
+                    document.getElementById('input-gemini-key').value = data.gemini_api_key || '';
                     renderAppCategorizerTable();
+                }
+            });
+            
+        fetch('/api/settings/startup')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('check-startup-toggle').checked = data.enabled;
                 }
             });
     }
@@ -716,20 +725,36 @@ document.addEventListener('DOMContentLoaded', () => {
     formSettings.addEventListener('submit', (e) => {
         e.preventDefault();
         const threshold = parseInt(inputIdleThreshold.value);
+        const geminiKey = document.getElementById('input-gemini-key').value.trim();
+        const startupEnabled = document.getElementById('check-startup-toggle').checked;
 
-        fetch('/api/settings', {
+        const saveSettingsPromise = fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idle_threshold: threshold })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert('系統設定儲存成功！');
-            } else {
-                alert('儲存失敗: ' + data.error);
-            }
-        });
+            body: JSON.stringify({ 
+                idle_threshold: threshold,
+                gemini_api_key: geminiKey
+            })
+        }).then(res => res.json());
+
+        const saveStartupPromise = fetch('/api/settings/startup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enable: startupEnabled })
+        }).then(res => res.json());
+
+        Promise.all([saveSettingsPromise, saveStartupPromise])
+            .then(([resSettings, resStartup]) => {
+                if (resSettings.success && resStartup.success) {
+                    alert('系統設定與開機啟動設定儲存成功！');
+                } else {
+                    const errMsg = (!resSettings.success ? resSettings.error : '') + ' ' + (!resStartup.success ? resStartup.error : '');
+                    alert('儲存失敗: ' + errMsg);
+                }
+            })
+            .catch(err => {
+                alert('網路錯誤，儲存失敗！');
+            });
     });
 
     function renderAppCategorizerTable() {

@@ -423,7 +423,7 @@ def configure_app():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-# 7. Get/Set Active Idle Threshold
+# 7. Get/Set Active Idle Threshold and Gemini API Key
 @app.route("/api/settings", methods=["GET", "POST"])
 def handle_settings():
     try:
@@ -435,6 +435,11 @@ def handle_settings():
             row = cursor.fetchone()
             idle_threshold = float(row[0]) if row else 60.0
             
+            # Query Gemini API key if present
+            cursor.execute("SELECT value FROM settings WHERE key = 'gemini_api_key'")
+            row_key = cursor.fetchone()
+            gemini_api_key = row_key[0] if row_key else ""
+            
             # Also return list of all unique categories in system
             cursor.execute("SELECT DISTINCT category FROM app_categories")
             cats = [r["category"] for r in cursor.fetchall()]
@@ -443,21 +448,62 @@ def handle_settings():
             return jsonify({
                 "success": True, 
                 "idle_threshold": idle_threshold,
+                "gemini_api_key": gemini_api_key,
                 "available_categories": cats
             })
             
         elif request.method == "POST":
             data = request.get_json()
             idle_threshold = data.get("idle_threshold")
+            gemini_api_key = data.get("gemini_api_key")
             
-            if idle_threshold is None or float(idle_threshold) <= 0:
-                return jsonify({"success": False, "error": "Invalid idle threshold"}), 400
+            if idle_threshold is not None:
+                if float(idle_threshold) <= 0:
+                    return jsonify({"success": False, "error": "Invalid idle threshold"}), 400
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('idle_threshold', ?)", (str(idle_threshold),))
                 
-            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('idle_threshold', ?)", (str(idle_threshold),))
+            if gemini_api_key is not None:
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('gemini_api_key', ?)", (str(gemini_api_key),))
+                
             conn.commit()
             conn.close()
             return jsonify({"success": True, "message": "Settings updated"})
             
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# 7.5 Silent Startup Toggle Manager (VBS launch in shell:startup)
+def get_startup_vbs_path():
+    startup_dir = os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+    return os.path.join(startup_dir, "screentime_startup.vbs")
+
+@app.route("/api/settings/startup", methods=["GET", "POST"])
+def handle_startup_toggle():
+    try:
+        vbs_path = get_startup_vbs_path()
+        if request.method == "GET":
+            is_enabled = os.path.exists(vbs_path)
+            return jsonify({"success": True, "enabled": is_enabled})
+            
+        elif request.method == "POST":
+            data = request.get_json() or {}
+            enable = data.get("enable", False)
+            
+            if enable:
+                run_bat_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run.bat")
+                vbs_content = (
+                    'Set WshShell = CreateObject("WScript.Shell")\n'
+                    f'WshShell.Run Chr(34) & "{run_bat_path}" & Chr(34), 0\n'
+                    'Set WshShell = Nothing\n'
+                )
+                os.makedirs(os.path.dirname(vbs_path), exist_ok=True)
+                with open(vbs_path, "w", encoding="utf-8") as f:
+                    f.write(vbs_content)
+                return jsonify({"success": True, "enabled": True, "message": "已啟用開機自動啟動項目"})
+            else:
+                if os.path.exists(vbs_path):
+                    os.remove(vbs_path)
+                return jsonify({"success": True, "enabled": False, "message": "已關閉開機自動啟動項目"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
