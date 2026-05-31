@@ -13,7 +13,7 @@ echo [*] NOTE: Keeping this terminal open is required for Screen Time tracking.
 echo ============================================================
 echo.
 
-python app.py
+"C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe" -u app.py > "%~dp0startup_log.txt" 2>&1
 
 echo.
 echo ============================================================
