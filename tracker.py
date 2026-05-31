@@ -750,10 +750,126 @@ def check_limits_and_notify():
     except Exception as e:
         print(f"Error checking limits: {e}", file=sys.stderr)
 
+# --- Audio Playback Detection Helpers ---
+def ensure_audiocheck_exe():
+    import os
+    import subprocess
+    import sys
+    
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    exe_path = os.path.join(project_dir, "audiocheck.exe")
+    cs_path = os.path.join(project_dir, "audiocheck.cs")
+    
+    if os.path.exists(exe_path):
+        return True
+        
+    cs_code = """using System;
+using System.Runtime.InteropServices;
+
+namespace AudioDetection {
+    class Program {
+        static void Main(string[] args) {
+            try {
+                var enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumerator());
+                IMMDevice speakers = enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia);
+                IAudioMeterInformation meter = (IAudioMeterInformation)speakers.Activate(typeof(IAudioMeterInformation).GUID, 0, IntPtr.Zero);
+                float peak = meter.GetPeakValue();
+                if (peak > 1E-08) {
+                    Console.WriteLine("True");
+                } else {
+                    Console.WriteLine("False");
+                }
+            } catch {
+                Console.WriteLine("False");
+            }
+        }
+
+        [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] private class MMDeviceEnumerator { }
+        private enum EDataFlow { eRender, eCapture, eAll }
+        private enum ERole { eConsole, eMultimedia, eCommunications }
+
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
+        private interface IMMDeviceEnumerator {
+            void NotNeeded();
+            IMMDevice GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role);
+        }
+
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("D666063F-1587-4E43-81F1-B948E807363F")]
+        private interface IMMDevice {
+            [return: MarshalAs(UnmanagedType.IUnknown)]
+            object Activate([MarshalAs(UnmanagedType.LPStruct)] Guid iid, int dwClsCtx, IntPtr pActivationParams);
+        }
+
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064")]
+        private interface IAudioMeterInformation {
+            float GetPeakValue();
+        }
+    }
+}
+"""
+    try:
+        with open(cs_path, "w", encoding="utf-8") as f:
+            f.write(cs_code)
+            
+        compilers = [
+            r"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe",
+            r"C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+        ]
+        
+        compiled = False
+        for csc in compilers:
+            if os.path.exists(csc):
+                startupinfo = None
+                if sys.platform == "win32":
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    startupinfo.wShowWindow = subprocess.SW_HIDE
+                res = subprocess.run([csc, "/nologo", f"/out:{exe_path}", cs_path], capture_output=True, text=True, startupinfo=startupinfo)
+                if res.returncode == 0:
+                    compiled = True
+                    break
+                    
+        if os.path.exists(cs_path):
+            os.remove(cs_path)
+            
+        return compiled
+    except Exception:
+        return False
+
+def check_audio_playing():
+    import os
+    import subprocess
+    import sys
+    
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    exe_path = os.path.join(project_dir, "audiocheck.exe")
+    if not os.path.exists(exe_path):
+        return False
+        
+    try:
+        startupinfo = None
+        if sys.platform == "win32":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            
+        res = subprocess.run(
+            [exe_path],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            startupinfo=startupinfo
+        )
+        return "True" in res.stdout
+    except Exception:
+        return False
+
+
 # --- Active Window Tracking Engine ---
 def run_tracker(stop_event=None):
     print("Screen Time Tracking Engine started...")
     init_db()
+    ensure_audiocheck_exe()
     
     current_session_id = None
     last_app = None
@@ -768,26 +884,66 @@ def run_tracker(stop_event=None):
             # 1. Fetch current settings (e.g. idle threshold)
             idle_threshold = float(get_setting("idle_threshold", DEFAULT_IDLE_THRESHOLD))
             
-            # 2. Check system idle state
-            idle_time = get_system_idle_time()
-            is_idle = idle_time >= idle_threshold
-            
-            # 3. Check current active window
+            # 2. Get active window information first
             hwnd = get_foreground_window()
             app_name = None
             window_title = ""
             
-            if hwnd != 0 and not is_idle:
+            if hwnd != 0:
                 app_name, pid = get_process_info(hwnd)
                 if app_name:
                     window_title = get_window_title(hwnd) or ""
-                    # Skip tracking if the active window is our own widget or lockout window
-                    title_lower_temp = window_title.lower()
-                    if "screen time widget" in title_lower_temp or "lockout.py" in title_lower_temp:
-                        time.sleep(1.0)
-                        continue
-                    # Check and enforce app limit lockouts
-                    check_app_lockout(hwnd, app_name, window_title)
+            
+            # 3. Check system idle state
+            idle_time = get_system_idle_time()
+            
+            # 4. Determine if active window is a video/media playback window
+            is_video = False
+            if app_name:
+                app_lower = app_name.lower()
+                title_lower = window_title.lower()
+                
+                # Known media player apps
+                video_apps = [
+                    "vlc.exe", "potplayer.exe", "netflix.exe", "kmplayer.exe", 
+                    "mpc-hc.exe", "powerdvd.exe", "gomp.exe"
+                ]
+                
+                # Browser video platform titles
+                video_title_keywords = [
+                    " - youtube", "youtube", "哔哩哔哩", "bilibili", 
+                    "netflix", "disney+", "巴哈姆特動畫瘋", "動畫瘋", 
+                    "twitch", "vimeo", "iqiyi", "愛奇藝"
+                ]
+                
+                if app_lower in video_apps:
+                    is_video = True
+                elif app_lower in ["chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"]:
+                    for kw in video_title_keywords:
+                        if kw in title_lower:
+                            is_video = True
+                            break
+            
+            # 5. Calculate idle state with dynamic threshold (check audio output when physically idle)
+            if is_video:
+                if idle_time >= idle_threshold:
+                    if check_audio_playing():
+                        is_idle = False  # Bypassed because video is actively outputting sound!
+                    else:
+                        is_idle = True   # Video is paused, user is idle!
+                else:
+                    is_idle = False      # Physical user is active
+            else:
+                is_idle = idle_time >= idle_threshold
+                
+            # 6. Skip tracking if active window is our own widget or lockout window
+            if hwnd != 0 and not is_idle and app_name:
+                title_lower_temp = window_title.lower()
+                if "screen time widget" in title_lower_temp or "lockout.py" in title_lower_temp:
+                    time.sleep(1.0)
+                    continue
+                # Check and enforce app limit lockouts
+                check_app_lockout(hwnd, app_name, window_title)
                     
             # 4. Handle State Transitions
             now = time.time()

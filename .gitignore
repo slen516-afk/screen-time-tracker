@@ -25,3 +25,4 @@ ENV/
 # Local Generated files
 screentime_startup.vbs
 startup_log.txt
+audiocheck.exe
