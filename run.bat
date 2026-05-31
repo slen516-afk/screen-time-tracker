@@ -6,13 +6,6 @@ cls
 echo ============================================================
 echo      ScreenTime PC - iOS Style Screen Time Tracker
 echo ============================================================
-echo.
-echo [*] Checking and ensuring Python dependencies are installed...
-python -m pip install -r requirements.txt
-if %errorlevel% neq 0 (
-    echo [!] Warning: Dependency check failed, attempting to start...
-)
-
 echo [*] Starting background active tracking engine and web server...
 echo [*] The dashboard page will open automatically in your default browser...
 echo.
